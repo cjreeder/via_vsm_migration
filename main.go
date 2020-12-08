@@ -8,8 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cjreeder/via_networking_script/via"
-	"github.com/fatih/color"
+	via "github.com/cjreeder/via_vsm_migration/via"
 	"github.com/spf13/pflag"
 )
 
@@ -35,19 +34,13 @@ func ReadCsv(filename string) ([][]string, error) {
 	return lines, nil
 }
 
-func SetVSM(vianame string, oldaddress string, ipaddress string, subnetmask string, gateway string, dns string) error {
-	defer color.Unset()
-	color.Set(color.FgYellow)
-
-	address := oldaddress
+func SetVSM(vsm string, vianame string, gateway string, address string) error {
 
 	var command via.Command
-	command.Command = "IpSetting"
-	command.Param1 = ipaddress
-	command.Param2 = subnetmask
+	command.Command = "VSMInfo"
+	command.Param1 = "Set"
+	command.Param2 = vsm
 	command.Param3 = gateway
-	command.Param4 = dns
-	command.Param5 = vianame
 
 	fmt.Printf("Setting IP Info for %s\n", vianame)
 	err := via.SendonlyCommand(command, address)
@@ -57,7 +50,7 @@ func SetVSM(vianame string, oldaddress string, ipaddress string, subnetmask stri
 	return nil
 }
 
-func Reboot() error {
+func Reboot(vianame string, address string) error {
 	var cmd via.command
 	command.Command = "Reboot"
 
@@ -88,17 +81,19 @@ func workers(i int, vsm string, wg *sync.WaitGroup, requests <-chan ViaList) {
 
 func main() {
 	var (
-		ifile string
-		ofile string
-		vsm   string
-		count int
-		wg    sync.WaitGroup
+		ifile     string
+		ofile     string
+		vsm       string
+		count     int
+		maxThread int
+		wg        sync.WaitGroup
 	)
 
 	pflag.StringVarP(&ifile, "input", "i", "", "Input file containing a list of VIAs to Migrate")
 	pflag.StringVarP(&ofile, "output", "o", "", "file to log all output to")
 	pflag.StringVarP(&vsm, "vsm", "v", "", "VIA Site Management Server IP Address")
-	pflag.IntVar(&count, "Processing Number", "n", "1000", "Size of Channel")
+	pflag.IntVar(&count, "channel_count", "c", "1000", "Size of Channel")
+	pflag.IntVar(&maxThread, "maxthread", "m", "10", "Maximum Number of Threads")
 	pflag.Parse()
 
 	lines, err := ReadCsv(ifile)
