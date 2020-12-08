@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	via "github.com/cjreeder/via_vsm_migration/via"
+	"github.com/cjreeder/via_vsm_migration/via"
 	"github.com/spf13/pflag"
 )
 
@@ -51,11 +51,11 @@ func SetVSM(vsm string, vianame string, gateway string, address string) error {
 }
 
 func Reboot(vianame string, address string) error {
-	var cmd via.command
+	var command via.Command
 	command.Command = "Reboot"
 
 	fmt.Printf("Rebooting: %s \n", vianame)
-	err := via.SendonlyCommand(cmd, address)
+	err := via.SendonlyCommand(command, address)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Error rebooting VIA: %s\n", vianame))
 	}
@@ -68,12 +68,13 @@ func workers(i int, vsm string, wg *sync.WaitGroup, requests <-chan ViaList) {
 		fmt.Printf("Worker: Working on %s\n", req.vianame)
 		err := SetVSM(vsm, req.vianame, req.gateway_id, req.ipaddress)
 		if err != nil {
-			fmt.Printf(err)
+			fmt.Printf("Error: %v \n", err)
 		}
-		err := Reboot(req.vianame, req.ipaddress)
+		err = Reboot(req.vianame, req.ipaddress)
 		if err != nil {
-			fmt.Printf(err)
+			fmt.Printf("Error: %v \n", err)
 		}
+		time.Sleep(10 * time.Second)
 	}
 	fmt.Printf("Worker Thread: %v - has complete and is now exiting....\n", i)
 	time.Sleep(10 * time.Second)
@@ -92,16 +93,16 @@ func main() {
 	pflag.StringVarP(&ifile, "input", "i", "", "Input file containing a list of VIAs to Migrate")
 	pflag.StringVarP(&ofile, "output", "o", "", "file to log all output to")
 	pflag.StringVarP(&vsm, "vsm", "v", "", "VIA Site Management Server IP Address")
-	pflag.IntVar(&count, "channel_count", "c", "1000", "Size of Channel")
-	pflag.IntVar(&maxThread, "maxthread", "m", "10", "Maximum Number of Threads")
+	pflag.IntVar(&count, "c", 1000, "Size of Channel")
+	pflag.IntVar(&maxThread, "m", 10, "Maximum Number of Threads")
 	pflag.Parse()
 
 	lines, err := ReadCsv(ifile)
 	if err != nil {
-		fmt.Printf("File cannot be found or read: %v", err.Error())
+		fmt.Printf("File cannot be found or read: %v\n", err.Error())
 	}
 
-	var ch = make(chan int, count) // This number 50 can be anything as long as it's larger than xthreads
+	var requests = make(chan ViaList, count) // This number 50 can be anything as long as it's larger than xthreads
 
 	// loop through the lines and turn it into an object
 	for _, line := range lines {
@@ -110,7 +111,7 @@ func main() {
 			gateway_id: line[1],
 			ipaddress:  line[2],
 		}
-		fmt.Printf("Changing over %v\n", data.vianame)
+		fmt.Printf("Moving Data to channel: %v\n", data.vianame)
 		requests <- data
 	}
 	for i := 0; i < maxThread; i++ {
