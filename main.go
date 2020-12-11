@@ -34,18 +34,26 @@ func ReadCsv(filename string) ([][]string, error) {
 	return lines, nil
 }
 
-func SetVSM(vsm string, vianame string, gateway string, address string) error {
+func SetVSM(ofile string, vsm string, vianame string, gateway string, address string) error {
+	log, err := os.OpenFile(ofile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("FAIL: %s\n", ofile)
+	}
 
+	defer log.Close()
 	var command via.Command
 	command.Command = "VSMInfo"
 	command.Param1 = "Set"
 	command.Param2 = vsm
 	command.Param3 = gateway
 
-	fmt.Printf("Setting IP Info for %s\n", vianame)
-	err := via.SendonlyCommand(command, address)
+	fmt.Printf("Changing VSM on  %s\n", vianame)
+	err = via.SendonlyCommand(command, address)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Error in setting IP on %s\n", vianame))
+		result := vianame + " - " + err.Error() + "\r\n"
+		_, err = log.WriteString(result)
+		log.Sync()
+		return errors.New(fmt.Sprintf("Error Changing VSM on %s\n", vianame))
 	}
 	return nil
 }
@@ -62,11 +70,11 @@ func Reboot(vianame string, address string) error {
 	return nil
 }
 
-func workers(i int, vsm string, wg *sync.WaitGroup, requests <-chan ViaList) {
+func workers(i int, vsm string, wg *sync.WaitGroup, requests <-chan ViaList, ofile string) {
 	defer wg.Done()
 	for req := range requests {
 		fmt.Printf("Worker: Working on %s\n", req.vianame)
-		err := SetVSM(vsm, req.vianame, req.gateway_id, req.ipaddress)
+		err := SetVSM(ofile, vsm, req.vianame, req.gateway_id, req.ipaddress)
 		if err != nil {
 			fmt.Printf("Error: %v \n", err)
 		}
@@ -116,7 +124,7 @@ func main() {
 	}
 	for i := 0; i < maxThread; i++ {
 		wg.Add(1)
-		go workers(i, vsm, &wg, requests)
+		go workers(i, vsm, &wg, requests, ofile)
 	}
 	close(requests) // This tells the goroutines there's nothing else to do
 	wg.Wait()       // Wait for the threads to finish}
