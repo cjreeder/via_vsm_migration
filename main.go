@@ -115,8 +115,8 @@ func main() {
 	// loop through the lines and turn it into an object
 	for _, line := range lines {
 		data := ViaList{
-			vianame:    line[0],
-			gateway_id: line[1],
+			gateway_id: line[0],
+			vianame:    line[1],
 			ipaddress:  line[2],
 		}
 		fmt.Printf("Moving Data to channel: %v\n", data.vianame)
